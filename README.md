@@ -1,4 +1,4 @@
-﻿# Sotos · demo en línea
+# Sotos · demo en línea
 
 Versión de demostración de **Sotos**, un ordenador completo dentro del navegador. Funciona sin servidor: todo se guarda en el navegador de quien lo prueba.
 
@@ -10,4 +10,4 @@ Este repositorio solo contiene la versión compilada del demo.
 
 ---
 
-<sub>© 2026 Sebastian Sotomontes. Todos los derechos reservados.</sub>
+<sub>© 2026 Sebastian Sotomontes · Licencia [MIT](LICENSE).</sub>

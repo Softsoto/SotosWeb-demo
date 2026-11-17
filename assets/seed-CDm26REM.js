@@ -1,4 +1,4 @@
-import{htmlToDocx as u,bookToXlsx as D,slidesToPptx as S,textPdf as A}from"./office-fEB3mEqN.js";import{r as B}from"./index-CEW0Hedf.js";const P=c=>`https://www.soundhelix.com/examples/mp3/SoundHelix-Song-${c}.mp3`,w="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/",E=`Bienvenido a Sotos OS
+import{htmlToDocx as u,bookToXlsx as D,slidesToPptx as S,textPdf as A}from"./office-CAIIyVQ9.js";import{r as B}from"./index-B9i1rUOV.js";const P=c=>`https://www.soundhelix.com/examples/mp3/SoundHelix-Song-${c}.mp3`,w="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/",E=`Bienvenido a Sotos OS
 =====================
 
 Sotos es un ordenador completo que vive en tu navegador.

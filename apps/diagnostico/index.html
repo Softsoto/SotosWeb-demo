@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estación de diagnóstico · sotomontessebas</title>
+<style>
+:root{
+  --ink:#06090f;
+  --ink-2:#0b1220;
+  --glass:rgba(255,255,255,.055);
+  --glass-2:rgba(255,255,255,.085);
+  --line:rgba(255,255,255,.11);
+  --text:#e6edf6;
+  --muted:#8fa0b6;
+  --amber:#f2a33c;
+  --teal:#34e3c8;
+  --ok:#4ade80;
+  --fail:#fb7185;
+  --skip:#64748b;
+  --r:14px;
+  --mono:ui-monospace,"Cascadia Mono","Consolas","SF Mono",monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;font-family:var(--sans);color:var(--text);
+  background:var(--ink);
+  -webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:"";position:fixed;inset:0;z-index:-1;
+  background:
+    radial-gradient(60vw 50vh at 12% -10%, rgba(242,163,60,.16), transparent 60%),
+    radial-gradient(55vw 45vh at 92% 8%, rgba(52,227,200,.13), transparent 60%),
+    radial-gradient(70vw 60vh at 50% 110%, rgba(52,227,200,.07), transparent 60%),
+    linear-gradient(180deg,#070b12 0%,#05080d 100%);
+}
+button{font-family:inherit}
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:8px}
+
+/* ---------- shell ---------- */
+.shell{display:grid;grid-template-columns:270px 1fr;min-height:100%;gap:18px;padding:18px;max-width:1500px;margin:0 auto}
+.rail{position:sticky;top:18px;align-self:start;height:calc(100vh - 36px);display:flex;flex-direction:column}
+.brand{display:flex;align-items:center;gap:11px;padding:2px 6px 16px}
+.mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(145deg,var(--amber),#b8701d);display:grid;place-items:center;flex:none;box-shadow:0 6px 18px rgba(242,163,60,.28)}
+.mark svg{width:19px;height:19px}
+.brand h1{font-size:15px;margin:0;font-weight:640;letter-spacing:-.01em;line-height:1.15}
+.brand p{margin:2px 0 0;font-size:11.5px;color:var(--muted)}
+
+.navlist{flex:1;overflow:auto;display:flex;flex-direction:column;gap:3px;padding-right:4px}
+.navlist::-webkit-scrollbar{width:6px}
+.navlist::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:99px}
+.nav{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;border:1px solid transparent;color:var(--muted);padding:9px 11px;border-radius:11px;cursor:pointer;font-size:13.5px;transition:background .15s,color .15s}
+.nav:hover{background:var(--glass);color:var(--text)}
+.nav.on{background:var(--glass-2);border-color:var(--line);color:var(--text);backdrop-filter:blur(14px)}
+.nav .dot{width:8px;height:8px;border-radius:99px;background:#2b3648;flex:none;box-shadow:0 0 0 3px rgba(255,255,255,.03)}
+.nav[data-state="ok"] .dot{background:var(--ok);box-shadow:0 0 10px rgba(74,222,128,.55)}
+.nav[data-state="fail"] .dot{background:var(--fail);box-shadow:0 0 10px rgba(251,113,133,.55)}
+.nav[data-state="skip"] .dot{background:var(--skip)}
+.nav .n{flex:1}
+.railfoot{padding:12px 6px 2px;font-size:11px;color:#5e6c80;border-top:1px solid var(--line);margin-top:10px}
+
+/* ---------- panels ---------- */
+.stage{min-width:0;padding-bottom:40px}
+.glass{background:var(--glass);border:1px solid var(--line);border-radius:var(--r);backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%)}
+.readout{display:flex;flex-wrap:wrap;gap:0;padding:0;overflow:hidden;margin-bottom:18px}
+.cell{flex:1 1 150px;padding:13px 16px;border-right:1px solid var(--line);min-width:0}
+.cell:last-child{border-right:0}
+.cell .k{font-size:11.5px;color:var(--muted);margin-bottom:3px}
+.cell .v{font-family:var(--mono);font-size:14.5px;color:var(--teal);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cell .v.amber{color:var(--amber)}
+
+section.panel{display:none;padding:22px}
+section.panel.on{display:block;animation:in .22s ease}
+@keyframes in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){section.panel.on{animation:none}}
+.panel h2{margin:0 0 4px;font-size:21px;font-weight:620;letter-spacing:-.02em}
+.panel .lead{margin:0 0 20px;color:var(--muted);font-size:13.5px;max-width:68ch;line-height:1.55}
+.hint{font-size:12.5px;color:#7b8ba1;line-height:1.5}
+
+.btn{background:var(--glass-2);border:1px solid var(--line);color:var(--text);padding:9px 15px;border-radius:10px;cursor:pointer;font-size:13.5px;transition:.15s}
+.btn:hover{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.2)}
+.btn.primary{background:linear-gradient(145deg,var(--amber),#d4832a);border-color:transparent;color:#1a1004;font-weight:600}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.teal{background:rgba(52,227,200,.14);border-color:rgba(52,227,200,.35);color:var(--teal)}
+.btn.teal:hover{background:rgba(52,227,200,.22)}
+.btn.sm{padding:6px 11px;font-size:12.5px}
+.row{display:flex;flex-wrap:wrap;gap:9px;align-items:center}
+.stack{display:flex;flex-direction:column;gap:14px}
+
+/* verdict bar */
+.verdict{margin-top:24px;padding:14px 16px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.verdict .q{font-size:13px;color:var(--muted);margin-right:4px}
+.vbtn{border:1px solid var(--line);background:transparent;color:var(--muted);padding:7px 13px;border-radius:9px;cursor:pointer;font-size:13px}
+.vbtn[data-v="ok"].on{background:rgba(74,222,128,.15);border-color:rgba(74,222,128,.45);color:var(--ok)}
+.vbtn[data-v="fail"].on{background:rgba(251,113,133,.15);border-color:rgba(251,113,133,.45);color:var(--fail)}
+.vbtn[data-v="skip"].on{background:rgba(148,163,184,.15);border-color:rgba(148,163,184,.4);color:#b6c2d1}
+.vbtn:hover{color:var(--text)}
+.note{flex:1;min-width:220px;background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:9px;color:var(--text);padding:8px 11px;font-size:13px;font-family:inherit}
+.note::placeholder{color:#5e6c80}
+
+/* keyboard */
+.kbwrap{overflow-x:auto;padding:16px;border-radius:12px;background:rgba(0,0,0,.28);border:1px solid var(--line)}
+.kb{display:flex;flex-direction:column;gap:6px;min-width:860px}
+.kbrow{display:flex;gap:6px}
+.kbgroup{display:flex;gap:18px;align-items:flex-start}
+.key{height:40px;min-width:40px;border-radius:7px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.09);border-bottom-width:2px;display:grid;place-items:center;font-size:11px;color:#b9c6d6;padding:0 5px;text-align:center;line-height:1.1;user-select:none;transition:background .08s,color .08s,transform .08s}
+.key.hit{background:linear-gradient(145deg,rgba(52,227,200,.85),rgba(20,160,140,.9));color:#04140f;border-color:transparent;font-weight:600}
+.key.down{transform:translateY(2px);background:var(--amber);color:#1a1004}
+.key.gap{background:transparent;border:0}
+.counter{font-family:var(--mono);font-size:13px;color:var(--muted)}
+.counter b{color:var(--teal);font-weight:600}
+
+/* screen swatches */
+.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px}
+.sw{height:64px;border-radius:10px;border:1px solid var(--line);cursor:pointer;position:relative;overflow:hidden}
+.sw span{position:absolute;left:8px;bottom:6px;font-size:11px;color:#fff;mix-blend-mode:difference}
+#fs{position:fixed;inset:0;z-index:999;display:none;place-items:center;cursor:pointer}
+#fs.on{display:grid}
+#fs .tip{font-size:13px;color:rgba(128,128,128,.85);font-family:var(--mono);mix-blend-mode:difference;pointer-events:none}
+
+/* meters */
+.meter{height:12px;border-radius:99px;background:rgba(0,0,0,.35);border:1px solid var(--line);overflow:hidden}
+.meter i{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--teal),var(--amber));transition:width .06s linear}
+.bigval{font-family:var(--mono);font-size:30px;color:var(--teal);letter-spacing:-.02em}
+.sub{font-size:12.5px;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.card{padding:15px;border-radius:12px;background:rgba(0,0,0,.22);border:1px solid var(--line)}
+.card h3{margin:0 0 10px;font-size:13.5px;font-weight:600;color:#cbd6e4}
+video{width:100%;max-width:520px;border-radius:12px;background:#000;border:1px solid var(--line)}
+canvas.pad{width:100%;height:230px;border-radius:12px;background:rgba(0,0,0,.3);border:1px solid var(--line);touch-action:none;display:block}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{font-family:var(--mono);font-size:12px;padding:5px 10px;border-radius:8px;background:rgba(0,0,0,.3);border:1px solid var(--line);color:var(--muted)}
+.chip.on{background:rgba(52,227,200,.16);border-color:rgba(52,227,200,.4);color:var(--teal)}
+.bars{display:flex;align-items:flex-end;gap:4px;height:110px;padding:10px;border-radius:12px;background:rgba(0,0,0,.28);border:1px solid var(--line)}
+.bars i{flex:1;background:linear-gradient(180deg,var(--teal),rgba(52,227,200,.25));border-radius:3px 3px 0 0;min-height:2px}
+.bars i.slow{background:linear-gradient(180deg,var(--fail),rgba(251,113,133,.25))}
+
+/* form / acta */
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:13px}
+.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
+.field input,.field select,.field textarea{width:100%;background:rgba(0,0,0,.3);border:1px solid var(--line);border-radius:9px;color:var(--text);padding:9px 11px;font-size:13.5px;font-family:inherit}
+.field textarea{min-height:76px;resize:vertical;line-height:1.5}
+.field.wide{grid-column:1/-1}
+.sigbox{background:#fff;border-radius:10px;overflow:hidden}
+canvas.sig{width:100%;height:120px;display:block;touch-action:none;cursor:crosshair}
+table.res{width:100%;border-collapse:collapse;font-size:13px}
+table.res th,table.res td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+table.res th{color:var(--muted);font-weight:500;font-size:12px}
+.tag{font-size:11.5px;padding:3px 9px;border-radius:99px;border:1px solid}
+.tag.ok{color:var(--ok);border-color:rgba(74,222,128,.4);background:rgba(74,222,128,.1)}
+.tag.fail{color:var(--fail);border-color:rgba(251,113,133,.4);background:rgba(251,113,133,.1)}
+.tag.skip,.tag.pend{color:#9aa8ba;border-color:var(--line);background:rgba(255,255,255,.04)}
+
+@media (max-width:900px){
+  .shell{grid-template-columns:1fr;padding:12px}
+  .rail{position:static;height:auto}
+  .navlist{flex-direction:row;overflow-x:auto;padding-bottom:8px}
+  .nav{white-space:nowrap}
+  .railfoot{display:none}
+}
+
+/* ---------- impresión ---------- */
+#paper{display:none}
+@media print{
+  body{background:#fff;color:#000}
+  body::before{display:none}
+  .shell{display:none}
+  #paper{display:block;font-size:12px;color:#000;padding:0;max-width:none}
+  #paper h1{font-size:19px;margin:0 0 2px}
+  #paper .sub{color:#555}
+  #paper table{width:100%;border-collapse:collapse;margin-top:10px}
+  #paper th,#paper td{border:1px solid #bbb;padding:5px 7px;text-align:left;font-size:11px}
+  #paper th{background:#f1f1f1}
+  #paper .two{display:flex;gap:26px;margin-top:22px}
+  #paper .two div{flex:1;text-align:center}
+  #paper .two img{max-height:80px;border-bottom:1px solid #000;width:100%;object-fit:contain}
+  #paper .hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:7px}
+  @page{margin:14mm}
+}
+</style>
+</head>
+<body>
+
+<div class="shell" id="app">
+  <aside class="rail">
+    <div class="brand">
+      <div class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#1a1004" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
+      </div>
+      <div>
+        <h1>Estación de diagnóstico</h1>
+        <p>Banco de pruebas de equipos</p>
+      </div>
+    </div>
+
+    <div class="navlist" id="navlist"></div>
+
+    <div class="railfoot">
+      Funciona sin internet. Guarde este archivo en su USB.
+    </div>
+  </aside>
+
+  <main class="stage">
+    <div class="readout glass" id="readout"></div>
+
+    <!-- ============ SISTEMA ============ -->
+    <section class="panel glass on" id="p-sistema">
+      <h2>Ficha del equipo</h2>
+      <p class="lead">Lo que el equipo reporta de sí mismo. Sirve para llenar la orden sin destapar nada ni instalar programas.</p>
+      <div class="grid2" id="sysgrid"></div>
+      <div class="verdict" data-for="sistema"></div>
+    </section>
+
+    <!-- ============ TECLADO ============ -->
+    <section class="panel glass" id="p-teclado">
+      <h2>Teclado</h2>
+      <p class="lead">Presione cada tecla; se pinta en verde al registrarse. Las que queden grises no están llegando al sistema. La tecla Windows no puede capturarse desde el navegador, pruébela aparte.</p>
+      <div class="row" style="margin-bottom:14px">
+        <button class="btn sm" id="kbreset">Reiniciar prueba</button>
+        <span class="counter" id="kbcount"><b>0</b> de 0 teclas</span>
+      </div>
+      <div class="kbwrap"><div class="kb" id="kb"></div></div>
+      <div class="verdict" data-for="teclado"></div>
+    </section>
+
+    <!-- ============ PANTALLA ============ -->
+    <section class="panel glass" id="p-pantalla">
+      <h2>Pantalla</h2>
+      <p class="lead">Abre a pantalla completa. Haga clic o use las flechas para cambiar de color; salga con Esc. Busque puntos fijos, manchas, líneas verticales y zonas con brillo desparejo.</p>
+      <div class="swatches" id="swatches"></div>
+      <p class="hint" style="margin-top:14px">Un punto negro sobre fondo blanco es píxel muerto. Un punto de color fijo sobre negro es píxel atascado y a veces se recupera con el patrón animado.</p>
+      <div class="verdict" data-for="pantalla"></div>
+    </section>
+
+    <!-- ============ AUDIO ============ -->
+    <section class="panel glass" id="p-audio">
+      <h2>Parlantes</h2>
+      <p class="lead">Genera un tono por canal para confirmar que ambos parlantes suenan, sin distorsión ni zumbido.</p>
+      <div class="row" style="margin-bottom:16px">
+        <button class="btn teal" data-pan="-1">Solo izquierdo</button>
+        <button class="btn teal" data-pan="1">Solo derecho</button>
+        <button class="btn teal" data-pan="0">Ambos</button>
+        <button class="btn" id="sweep">Barrido 100 Hz → 12 kHz</button>
+        <button class="btn" id="stopaudio">Detener</button>
+      </div>
+      <div class="card" style="max-width:420px">
+        <h3>Frecuencia</h3>
+        <input type="range" id="freq" min="60" max="12000" value="440" step="10" style="width:100%">
+        <div class="row" style="justify-content:space-between;margin-top:8px">
+          <span class="bigval" id="freqval">440 Hz</span>
+          <span class="sub" id="audiostate">en silencio</span>
+        </div>
+      </div>
+      <div class="verdict" data-for="audio"></div>
+    </section>
+
+    <!-- ============ MICRÓFONO ============ -->
+    <section class="panel glass" id="p-microfono">
+      <h2>Micrófono</h2>
+      <p class="lead">Mide el nivel de entrada en vivo y graba cinco segundos para escuchar cómo se oye realmente.</p>
+      <div class="row" style="margin-bottom:16px">
+        <button class="btn primary" id="micstart">Activar micrófono</button>
+        <button class="btn" id="micrec" disabled>Grabar 5 segundos</button>
+        <button class="btn" id="micstop" disabled>Apagar</button>
+      </div>
+      <div class="card" style="max-width:520px">
+        <h3>Nivel de entrada</h3>
+        <div class="meter"><i id="miclevel"></i></div>
+        <div class="row" style="justify-content:space-between;margin-top:10px">
+          <span class="sub" id="micstate">sin activar</span>
+          <span class="counter" id="micpeak">pico <b>0</b>%</span>
+        </div>
+        <audio id="micplay" controls style="width:100%;margin-top:12px;display:none"></audio>
+      </div>
+      <div class="verdict" data-for="microfono"></div>
+    </section>
+
+    <!-- ============ CÁMARA ============ -->
+    <section class="panel glass" id="p-camara">
+      <h2>Cámara</h2>
+      <p class="lead">Vista en vivo para revisar enfoque, color y si el obturador físico está cerrado.</p>
+      <div class="row" style="margin-bottom:14px">
+        <button class="btn primary" id="camstart">Encender cámara</button>
+        <select id="camlist" class="btn" style="display:none"></select>
+        <button class="btn" id="camstop" disabled>Apagar</button>
+      </div>
+      <video id="cam" autoplay playsinline muted></video>
+      <div class="verdict" data-for="camara"></div>
+    </section>
+
+    <!-- ============ BATERÍA ============ -->
+    <section class="panel glass" id="p-bateria">
+      <h2>Batería</h2>
+      <p class="lead">Carga actual y estado reportado por el equipo. Para salud real de la celda use el informe de batería de Windows; aquí queda el dato del momento.</p>
+      <div class="grid2" id="batgrid"></div>
+      <div class="card" style="margin-top:14px">
+        <h3>Informe completo en Windows</h3>
+        <p class="hint">Abra el símbolo del sistema como administrador y ejecute:</p>
+        <p style="font-family:var(--mono);font-size:13px;color:var(--amber);margin:8px 0 0">powercfg /batteryreport /output C:\informe.html</p>
+      </div>
+      <div class="verdict" data-for="bateria"></div>
+    </section>
+
+    <!-- ============ MOUSE / TÁCTIL ============ -->
+    <section class="panel glass" id="p-puntero">
+      <h2>Mouse y panel táctil</h2>
+      <p class="lead">Dibuje sobre el área para detectar saltos del cursor, y use los botones y la rueda para confirmar que responden.</p>
+      <canvas class="pad" id="pad"></canvas>
+      <div class="row" style="margin-top:14px">
+        <button class="btn sm" id="padclear">Limpiar</button>
+        <div class="chips">
+          <span class="chip" id="c-left">clic izquierdo</span>
+          <span class="chip" id="c-middle">clic central</span>
+          <span class="chip" id="c-right">clic derecho</span>
+          <span class="chip" id="c-dbl">doble clic</span>
+          <span class="chip" id="c-wheel">rueda</span>
+          <span class="chip" id="c-multi">multitáctil</span>
+        </div>
+      </div>
+      <div class="verdict" data-for="puntero"></div>
+    </section>
+
+    <!-- ============ CPU ============ -->
+    <section class="panel glass" id="p-cpu">
+      <h2>Procesador</h2>
+      <p class="lead">Carga el procesador en ciclos cortos y grafica el rendimiento de cada uno. Si las barras caen y se quedan abajo, el equipo está recalentando o limitando frecuencia: pasta térmica y ventilación.</p>
+      <div class="row" style="margin-bottom:16px">
+        <button class="btn primary" id="cpurun">Prueba corta (15 s)</button>
+        <button class="btn" id="cpulong">Prueba de calor (60 s)</button>
+        <button class="btn" id="cpustop" disabled>Detener</button>
+      </div>
+      <div class="grid2" style="margin-bottom:14px">
+        <div class="card"><h3>Rendimiento actual</h3><div class="bigval" id="cpunow">—</div><div class="sub">millones de operaciones por segundo</div></div>
+        <div class="card"><h3>Caída desde el máximo</h3><div class="bigval" id="cpudrop">—</div><div class="sub">más de 25% sostenido sugiere sobrecalentamiento</div></div>
+      </div>
+      <div class="bars" id="cpubars"></div>
+      <div class="verdict" data-for="cpu"></div>
+    </section>
+
+    <!-- ============ ACTA ============ -->
+    <section class="panel glass" id="p-acta">
+      <h2>Acta de recepción y entrega</h2>
+      <p class="lead">Llene los datos, firme con el cliente y genere el documento. Se imprime o se guarda como PDF desde el mismo diálogo.</p>
+
+      <div class="form">
+        <div class="field"><label for="f-tipo">Tipo de acta</label>
+          <select id="f-tipo"><option>Recepción del equipo</option><option>Entrega del equipo</option><option>Diagnóstico en sitio</option></select></div>
+        <div class="field"><label for="f-orden">Número de orden</label><input id="f-orden" placeholder="OS-0001"></div>
+        <div class="field"><label for="f-fecha">Fecha</label><input id="f-fecha" type="date"></div>
+        <div class="field"><label for="f-cliente">Cliente</label><input id="f-cliente" placeholder="Nombre completo"></div>
+        <div class="field"><label for="f-doc">Documento o NIT</label><input id="f-doc"></div>
+        <div class="field"><label for="f-tel">Teléfono</label><input id="f-tel"></div>
+        <div class="field"><label for="f-equipo">Equipo</label><input id="f-equipo" placeholder="Portátil, torre, todo en uno"></div>
+        <div class="field"><label for="f-marca">Marca y modelo</label><input id="f-marca"></div>
+        <div class="field"><label for="f-serial">Serial</label><input id="f-serial"></div>
+        <div class="field wide"><label for="f-acc">Accesorios que se reciben</label><input id="f-acc" placeholder="Cargador, maletín, mouse, clave de acceso"></div>
+        <div class="field wide"><label for="f-motivo">Falla reportada por el cliente</label><textarea id="f-motivo"></textarea></div>
+        <div class="field wide"><label for="f-obs">Observaciones del técnico</label><textarea id="f-obs" placeholder="Estado físico, golpes, tornillos faltantes, riesgos advertidos al cliente"></textarea></div>
+        <div class="field"><label for="f-tec">Técnico responsable</label><input id="f-tec" value="Sebastián Sotomontes"></div>
+        <div class="field"><label for="f-valor">Valor aproximado</label><input id="f-valor" placeholder="$ 0"></div>
+      </div>
+
+      <div class="grid2" style="margin-top:18px">
+        <div class="card"><h3>Firma del cliente</h3><div class="sigbox"><canvas class="sig" id="sig1"></canvas></div><button class="btn sm" style="margin-top:9px" data-clear="sig1">Borrar firma</button></div>
+        <div class="card"><h3>Firma del técnico</h3><div class="sigbox"><canvas class="sig" id="sig2"></canvas></div><button class="btn sm" style="margin-top:9px" data-clear="sig2">Borrar firma</button></div>
+      </div>
+
+      <h3 style="margin:24px 0 8px;font-size:14px;color:#cbd6e4">Resultados registrados</h3>
+      <table class="res" id="restable"></table>
+
+      <div class="row" style="margin-top:20px">
+        <button class="btn primary" id="print">Generar acta</button>
+        <button class="btn" id="export">Guardar copia en JSON</button>
+        <button class="btn" id="reset">Vaciar todo</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="fs"><span class="tip">clic o flechas para cambiar · Esc para salir</span></div>
+
+<!-- documento imprimible -->
+<div id="paper"></div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   Estado y navegación
+   ============================================================ */
+const TESTS = [
+  {id:"sistema",   n:"Ficha del equipo"},
+  {id:"teclado",   n:"Teclado"},
+  {id:"pantalla",  n:"Pantalla"},
+  {id:"audio",     n:"Parlantes"},
+  {id:"microfono", n:"Micrófono"},
+  {id:"camara",    n:"Cámara"},
+  {id:"bateria",   n:"Batería"},
+  {id:"puntero",   n:"Mouse y táctil"},
+  {id:"cpu",       n:"Procesador"},
+  {id:"acta",      n:"Acta de servicio"}
+];
+
+const state = { results:{}, sys:{} };
+TESTS.forEach(t => { if(t.id!=="acta") state.results[t.id] = {v:null, note:""}; });
+
+const $  = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+
+const navlist = $("#navlist");
+TESTS.forEach((t,i) => {
+  const b = document.createElement("button");
+  b.className = "nav" + (i===0 ? " on" : "");
+  b.dataset.id = t.id;
+  b.innerHTML = '<span class="dot"></span><span class="n"></span>';
+  b.querySelector(".n").textContent = t.n;
+  b.addEventListener("click", () => go(t.id));
+  navlist.appendChild(b);
+});
+
+let current = "sistema";
+function go(id){
+  current = id;
+  $$(".nav").forEach(n => n.classList.toggle("on", n.dataset.id===id));
+  $$(".panel").forEach(p => p.classList.toggle("on", p.id==="p"+"-"+id));
+  if(id==="acta") drawResults();
+  window.scrollTo({top:0,behavior:"instant"});
+}
+
+/* barras de veredicto */
+$$(".verdict").forEach(v => {
+  const id = v.dataset.for;
+  v.innerHTML =
+    '<span class="q">Resultado de esta prueba:</span>' +
+    '<button class="vbtn" data-v="ok">Aprobada</button>' +
+    '<button class="vbtn" data-v="fail">Con fallas</button>' +
+    '<button class="vbtn" data-v="skip">No aplica</button>' +
+    '<input class="note" placeholder="Nota para el acta">';
+  v.querySelectorAll(".vbtn").forEach(b => b.addEventListener("click", () => {
+    const val = b.dataset.v;
+    state.results[id].v = (state.results[id].v===val) ? null : val;
+    v.querySelectorAll(".vbtn").forEach(x => x.classList.toggle("on", x.dataset.v===state.results[id].v));
+    paintDot(id);
+    save();
+  }));
+  v.querySelector(".note").addEventListener("input", e => { state.results[id].note = e.target.value; save(); });
+});
+
+function paintDot(id){
+  const n = $('.nav[data-id="'+id+'"]');
+  if(!n) return;
+  if(state.results[id] && state.results[id].v) n.dataset.state = state.results[id].v;
+  else delete n.dataset.state;
+}
+
+/* ============================================================
+   Ficha del equipo
+   ============================================================ */
+function gpuInfo(){
+  try{
+    const c = document.createElement("canvas");
+    const gl = c.getContext("webgl") || c.getContext("experimental-webgl");
+    if(!gl) return "no disponible";
+    const ext = gl.getExtension("WEBGL_debug_renderer_info");
+    return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : (gl.getParameter(gl.RENDERER) || "no disponible");
+  }catch(e){ return "no disponible"; }
+}
+function osGuess(){
+  const u = navigator.userAgent;
+  if(/Windows NT 10/.test(u)) return "Windows 10 u 11";
+  if(/Windows NT 6.1/.test(u)) return "Windows 7";
+  if(/Windows/.test(u)) return "Windows";
+  if(/Mac OS X/.test(u)) return "macOS";
+  if(/Android/.test(u)) return "Android";
+  if(/iPhone|iPad/.test(u)) return "iOS / iPadOS";
+  if(/Linux/.test(u)) return "Linux";
+  return "no identificado";
+}
+function browserGuess(){
+  const u = navigator.userAgent;
+  if(/Edg\//.test(u)) return "Edge";
+  if(/OPR\//.test(u)) return "Opera";
+  if(/Chrome\//.test(u)) return "Chrome";
+  if(/Firefox\//.test(u)) return "Firefox";
+  if(/Safari\//.test(u)) return "Safari";
+  return "otro";
+}
+(function buildSys(){
+  const s = state.sys = {
+    "Sistema operativo": osGuess(),
+    "Navegador usado": browserGuess(),
+    "Núcleos lógicos": (navigator.hardwareConcurrency || "no reportado") + "",
+    "Memoria RAM aproximada": navigator.deviceMemory ? navigator.deviceMemory + " GB o más" : "no reportada",
+    "Gráficos": gpuInfo(),
+    "Resolución de pantalla": screen.width + " × " + screen.height + " px",
+    "Escalado de Windows": Math.round((window.devicePixelRatio||1)*100) + "%",
+    "Profundidad de color": (screen.colorDepth||24) + " bits",
+    "Puntos táctiles": (navigator.maxTouchPoints||0) + "",
+    "Idioma del sistema": navigator.language || "—",
+    "Zona horaria": (Intl.DateTimeFormat().resolvedOptions().timeZone || "—"),
+    "Conexión a internet": navigator.onLine ? "conectado" : "sin conexión"
+  };
+  const top = ["Sistema operativo","Núcleos lógicos","Memoria RAM aproximada","Resolución de pantalla"];
+  $("#readout").innerHTML = top.map(k =>
+    '<div class="cell"><div class="k">'+k+'</div><div class="v'+(k==="Sistema operativo"?" amber":"")+'">'+esc(s[k])+'</div></div>'
+  ).join("");
+  $("#sysgrid").innerHTML = Object.keys(s).map(k =>
+    '<div class="card"><h3>'+k+'</h3><div style="font-family:var(--mono);font-size:14px;color:var(--teal);word-break:break-word">'+esc(s[k])+'</div></div>'
+  ).join("");
+})();
+function esc(t){ return String(t).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+/* ============================================================
+   Teclado
+   ============================================================ */
+const K = (c,l,w) => ({c:c,l:l,w:w||1});
+const KB_ROWS = [
+  [K("Escape","Esc"),K("","",0.5),K("F1","F1"),K("F2","F2"),K("F3","F3"),K("F4","F4"),K("","",0.4),K("F5","F5"),K("F6","F6"),K("F7","F7"),K("F8","F8"),K("","",0.4),K("F9","F9"),K("F10","F10"),K("F11","F11"),K("F12","F12"),K("","",0.4),K("Delete","Supr"),K("Home","Inicio"),K("End","Fin")],
+  [K("Backquote","|°¬"),K("Digit1","1"),K("Digit2","2"),K("Digit3","3"),K("Digit4","4"),K("Digit5","5"),K("Digit6","6"),K("Digit7","7"),K("Digit8","8"),K("Digit9","9"),K("Digit0","0"),K("Minus","'?"),K("Equal","¡¿"),K("Backspace","Retro",2),K("","",0.4),K("NumLock","Bloq"),K("NumpadDivide","/"),K("NumpadMultiply","*"),K("NumpadSubtract","-")],
+  [K("Tab","Tab",1.5),K("KeyQ","Q"),K("KeyW","W"),K("KeyE","E"),K("KeyR","R"),K("KeyT","T"),K("KeyY","Y"),K("KeyU","U"),K("KeyI","I"),K("KeyO","O"),K("KeyP","P"),K("BracketLeft","´¨"),K("BracketRight","+*"),K("Enter","Enter",1.5),K("","",0.4),K("Numpad7","7"),K("Numpad8","8"),K("Numpad9","9"),K("NumpadAdd","+")],
+  [K("CapsLock","Bloq Mayús",1.8),K("KeyA","A"),K("KeyS","S"),K("KeyD","D"),K("KeyF","F"),K("KeyG","G"),K("KeyH","H"),K("KeyJ","J"),K("KeyK","K"),K("KeyL","L"),K("Semicolon","Ñ"),K("Quote","{["),K("Backslash","}]"),K("","",0.7),K("","",0.4),K("Numpad4","4"),K("Numpad5","5"),K("Numpad6","6"),K("NumpadEnter","Ent")],
+  [K("ShiftLeft","Shift",1.4),K("IntlBackslash","<>"),K("KeyZ","Z"),K("KeyX","X"),K("KeyC","C"),K("KeyV","V"),K("KeyB","B"),K("KeyN","N"),K("KeyM","M"),K("Comma",",;"),K("Period",".:"),K("Slash","-_"),K("ShiftRight","Shift",1.9),K("","",0.4),K("Numpad1","1"),K("Numpad2","2"),K("Numpad3","3"),K("","",0.4),K("ArrowUp","↑")],
+  [K("ControlLeft","Ctrl",1.3),K("MetaLeft","Win"),K("AltLeft","Alt"),K("Space","Espacio",6),K("AltRight","Alt Gr"),K("ContextMenu","Menú"),K("ControlRight","Ctrl",1.3),K("","",0.4),K("Numpad0","0",2),K("NumpadDecimal","."),K("","",0.4),K("ArrowLeft","←"),K("ArrowDown","↓"),K("ArrowRight","→")]
+];
+const kbEl = $("#kb");
+let kbTotal = 0, kbHit = new Set();
+KB_ROWS.forEach(row => {
+  const r = document.createElement("div");
+  r.className = "kbrow";
+  row.forEach(k => {
+    const d = document.createElement("div");
+    const empty = !k.c;
+    d.className = "key" + (empty ? " gap" : "");
+    d.style.flex = k.w + " 0 auto";
+    d.style.minWidth = (40*k.w + 6*(k.w-1)) + "px";
+    if(!empty){ d.dataset.code = k.c; d.textContent = k.l; kbTotal++; }
+    r.appendChild(d);
+  });
+  kbEl.appendChild(r);
+});
+function kbCount(){ $("#kbcount").innerHTML = "<b>"+kbHit.size+"</b> de "+kbTotal+" teclas"; }
+kbCount();
+document.addEventListener("keydown", e => {
+  if(current!=="teclado") return;
+  const tgt = e.target;
+  if(tgt && (tgt.tagName==="INPUT"||tgt.tagName==="TEXTAREA"||tgt.tagName==="SELECT")) return;
+  const el = kbEl.querySelector('[data-code="'+CSS.escape(e.code)+'"]');
+  if(el){ e.preventDefault(); el.classList.add("hit","down"); kbHit.add(e.code); kbCount(); }
+});
+document.addEventListener("keyup", e => {
+  const el = kbEl.querySelector('[data-code="'+CSS.escape(e.code)+'"]');
+  if(el) el.classList.remove("down");
+});
+$("#kbreset").addEventListener("click", () => {
+  kbHit.clear();
+  kbEl.querySelectorAll(".key").forEach(k => k.classList.remove("hit","down"));
+  kbCount();
+});
+
+/* ============================================================
+   Pantalla
+   ============================================================ */
+const SW = [
+  {n:"Blanco", c:"#ffffff"}, {n:"Negro", c:"#000000"}, {n:"Rojo", c:"#ff0000"},
+  {n:"Verde", c:"#00ff00"}, {n:"Azul", c:"#0000ff"}, {n:"Cian", c:"#00ffff"},
+  {n:"Magenta", c:"#ff00ff"}, {n:"Amarillo", c:"#ffff00"}, {n:"Gris medio", c:"#808080"},
+  {n:"Degradado", c:"linear-gradient(90deg,#000,#fff)"},
+  {n:"Cuadrícula", c:"repeating-conic-gradient(#000 0% 25%, #fff 0% 50%) 50%/22px 22px"},
+  {n:"Antipíxel", c:"anim"}
+];
+const fs = $("#fs");
+let swIdx = 0, animTimer = null;
+$("#swatches").innerHTML = SW.map((s,i) =>
+  '<div class="sw" data-i="'+i+'" style="background:'+(s.c==="anim"?"#111":s.c)+'"><span>'+s.n+'</span></div>'
+).join("");
+$$(".sw").forEach(el => el.addEventListener("click", () => openFs(+el.dataset.i)));
+function paintFs(){
+  const s = SW[swIdx];
+  clearInterval(animTimer); animTimer = null;
+  if(s.c==="anim"){
+    const cols = ["#ff0000","#00ff00","#0000ff","#ffffff","#000000"];
+    let i = 0;
+    animTimer = setInterval(() => { fs.style.background = cols[i++ % cols.length]; }, 90);
+  } else fs.style.background = s.c;
+}
+function openFs(i){
+  swIdx = i; fs.classList.add("on"); paintFs();
+  if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(()=>{});
+}
+function closeFs(){
+  fs.classList.remove("on");
+  clearInterval(animTimer); animTimer = null;
+  if(document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(()=>{});
+}
+fs.addEventListener("click", () => { swIdx = (swIdx+1) % SW.length; paintFs(); });
+document.addEventListener("keydown", e => {
+  if(!fs.classList.contains("on")) return;
+  if(e.key==="Escape"){ closeFs(); }
+  else if(e.key==="ArrowRight"||e.key===" "){ e.preventDefault(); swIdx=(swIdx+1)%SW.length; paintFs(); }
+  else if(e.key==="ArrowLeft"){ e.preventDefault(); swIdx=(swIdx-1+SW.length)%SW.length; paintFs(); }
+});
+
+/* ============================================================
+   Parlantes
+   ============================================================ */
+let ac = null, osc = null, gain = null, panner = null, sweepTimer = null;
+function audioOn(pan){
+  if(!ac) ac = new (window.AudioContext||window.webkitAudioContext)();
+  if(ac.state==="suspended") ac.resume();
+  audioOff(true);
+  osc = ac.createOscillator();
+  gain = ac.createGain();
+  osc.type = "sine";
+  osc.frequency.value = +$("#freq").value;
+  gain.gain.value = 0.12;
+  if(ac.createStereoPanner){ panner = ac.createStereoPanner(); panner.pan.value = pan; osc.connect(gain).connect(panner).connect(ac.destination); }
+  else osc.connect(gain).connect(ac.destination);
+  osc.start();
+  const t = pan<0 ? "izquierdo" : pan>0 ? "derecho" : "ambos canales";
+  $("#audiostate").textContent = "sonando en " + t;
+}
+function audioOff(quiet){
+  clearInterval(sweepTimer); sweepTimer = null;
+  if(osc){ try{ osc.stop(); }catch(e){} osc.disconnect(); osc = null; }
+  if(!quiet) $("#audiostate").textContent = "en silencio";
+}
+$$("[data-pan]").forEach(b => b.addEventListener("click", () => audioOn(+b.dataset.pan)));
+$("#stopaudio").addEventListener("click", () => audioOff());
+$("#freq").addEventListener("input", e => {
+  $("#freqval").textContent = e.target.value + " Hz";
+  if(osc) osc.frequency.value = +e.target.value;
+});
+$("#sweep").addEventListener("click", () => {
+  audioOn(0);
+  let f = 100;
+  $("#audiostate").textContent = "barrido en curso";
+  sweepTimer = setInterval(() => {
+    f = Math.round(f * 1.06);
+    if(f > 12000){ audioOff(); return; }
+    $("#freq").value = Math.min(f,12000);
+    $("#freqval").textContent = f + " Hz";
+    if(osc) osc.frequency.value = f;
+  }, 60);
+});
+
+/* ============================================================
+   Micrófono
+   ============================================================ */
+let micStream = null, micRaf = null, micRec = null, micPeak = 0;
+$("#micstart").addEventListener("click", async () => {
+  try{
+    micStream = await navigator.mediaDevices.getUserMedia({audio:true});
+    if(!ac) ac = new (window.AudioContext||window.webkitAudioContext)();
+    if(ac.state==="suspended") ac.resume();
+    const src = ac.createMediaStreamSource(micStream);
+    const an = ac.createAnalyser(); an.fftSize = 1024;
+    src.connect(an);
+    const buf = new Uint8Array(an.fftSize);
+    $("#micstate").textContent = "escuchando";
+    $("#micrec").disabled = false; $("#micstop").disabled = false; $("#micstart").disabled = true;
+    (function loop(){
+      an.getByteTimeDomainData(buf);
+      let sum = 0;
+      for(let i=0;i<buf.length;i++){ const v=(buf[i]-128)/128; sum += v*v; }
+      const rms = Math.min(100, Math.round(Math.sqrt(sum/buf.length)*320));
+      $("#miclevel").style.width = rms + "%";
+      if(rms > micPeak){ micPeak = rms; $("#micpeak").innerHTML = "pico <b>"+rms+"</b>%"; }
+      micRaf = requestAnimationFrame(loop);
+    })();
+  }catch(err){
+    $("#micstate").textContent = "el navegador negó el acceso al micrófono";
+  }
+});
+$("#micrec").addEventListener("click", () => {
+  if(!micStream || !window.MediaRecorder) return;
+  const chunks = [];
+  micRec = new MediaRecorder(micStream);
+  micRec.ondataavailable = e => chunks.push(e.data);
+  micRec.onstop = () => {
+    const url = URL.createObjectURL(new Blob(chunks));
+    const a = $("#micplay"); a.src = url; a.style.display = "block";
+    $("#micstate").textContent = "grabación lista, reprodúzcala";
+  };
+  micRec.start();
+  $("#micstate").textContent = "grabando…";
+  setTimeout(() => { if(micRec && micRec.state!=="inactive") micRec.stop(); }, 5000);
+});
+$("#micstop").addEventListener("click", () => {
+  if(micRaf) cancelAnimationFrame(micRaf);
+  if(micStream) micStream.getTracks().forEach(t => t.stop());
+  micStream = null; micPeak = 0;
+  $("#miclevel").style.width = "0%";
+  $("#micstate").textContent = "apagado";
+  $("#micstart").disabled = false; $("#micrec").disabled = true; $("#micstop").disabled = true;
+});
+
+/* ============================================================
+   Cámara
+   ============================================================ */
+let camStream = null;
+$("#camstart").addEventListener("click", async () => {
+  try{
+    camStream = await navigator.mediaDevices.getUserMedia({video:true});
+    $("#cam").srcObject = camStream;
+    $("#camstop").disabled = false; $("#camstart").disabled = true;
+    const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind==="videoinput");
+    if(devs.length > 1){
+      const sel = $("#camlist");
+      sel.style.display = "inline-block";
+      sel.innerHTML = devs.map((d,i) => '<option value="'+d.deviceId+'">'+esc(d.label || ("Cámara "+(i+1)))+'</option>').join("");
+      sel.onchange = async () => {
+        if(camStream) camStream.getTracks().forEach(t => t.stop());
+        camStream = await navigator.mediaDevices.getUserMedia({video:{deviceId:{exact:sel.value}}});
+        $("#cam").srcObject = camStream;
+      };
+    }
+  }catch(err){ alert("No se pudo abrir la cámara: " + err.name); }
+});
+$("#camstop").addEventListener("click", () => {
+  if(camStream) camStream.getTracks().forEach(t => t.stop());
+  camStream = null; $("#cam").srcObject = null;
+  $("#camstop").disabled = true; $("#camstart").disabled = false;
+});
+
+/* ============================================================
+   Batería
+   ============================================================ */
+(function bat(){
+  const g = $("#batgrid");
+  if(!navigator.getBattery){
+    g.innerHTML = '<div class="card"><h3>No disponible</h3><div class="sub">Este navegador no entrega datos de batería. Use Chrome o Edge, o el informe de powercfg.</div></div>';
+    return;
+  }
+  navigator.getBattery().then(b => {
+    const fmt = s => (!isFinite(s) || s===0) ? "—" : Math.floor(s/3600)+" h "+Math.floor((s%3600)/60)+" min";
+    const render = () => {
+      g.innerHTML =
+        '<div class="card"><h3>Carga actual</h3><div class="bigval">'+Math.round(b.level*100)+'%</div></div>'+
+        '<div class="card"><h3>Estado</h3><div class="bigval" style="color:var(--amber)">'+(b.charging?"Cargando":"En batería")+'</div></div>'+
+        '<div class="card"><h3>Tiempo para carga completa</h3><div class="bigval">'+fmt(b.chargingTime)+'</div></div>'+
+        '<div class="card"><h3>Autonomía restante</h3><div class="bigval">'+fmt(b.dischargingTime)+'</div></div>';
+    };
+    render();
+    ["levelchange","chargingchange","chargingtimechange","dischargingtimechange"].forEach(ev => b.addEventListener(ev, render));
+  }).catch(() => { g.innerHTML = '<div class="card"><h3>No disponible</h3><div class="sub">El equipo no reportó batería. Puede ser de escritorio.</div></div>'; });
+})();
+
+/* ============================================================
+   Mouse y táctil
+   ============================================================ */
+(function pad(){
+  const c = $("#pad"), ctx = c.getContext("2d");
+  const pts = new Map();
+  function size(){
+    const dpr = window.devicePixelRatio || 1;
+    c.width = c.clientWidth * dpr; c.height = c.clientHeight * dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.lineWidth = 2.2;
+  }
+  window.addEventListener("resize", size);
+  setTimeout(size, 60);
+  const mark = id => { const el = $("#"+id); if(el) el.classList.add("on"); };
+  c.addEventListener("pointerdown", e => {
+    c.setPointerCapture(e.pointerId);
+    pts.set(e.pointerId, {x:e.offsetX, y:e.offsetY});
+    if(e.button===0) mark("c-left");
+    if(e.button===1) mark("c-middle");
+    if(e.button===2) mark("c-right");
+    if(pts.size > 1) mark("c-multi");
+  });
+  c.addEventListener("pointermove", e => {
+    const p = pts.get(e.pointerId);
+    if(!p) return;
+    ctx.strokeStyle = e.pointerType==="touch" ? "#f2a33c" : "#34e3c8";
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(e.offsetX, e.offsetY); ctx.stroke();
+    pts.set(e.pointerId, {x:e.offsetX, y:e.offsetY});
+  });
+  ["pointerup","pointercancel","pointerleave"].forEach(ev => c.addEventListener(ev, e => pts.delete(e.pointerId)));
+  c.addEventListener("contextmenu", e => { e.preventDefault(); mark("c-right"); });
+  c.addEventListener("dblclick", () => mark("c-dbl"));
+  c.addEventListener("wheel", e => { e.preventDefault(); mark("c-wheel"); }, {passive:false});
+  c.addEventListener("auxclick", e => { if(e.button===1) mark("c-middle"); });
+  $("#padclear").addEventListener("click", () => {
+    ctx.clearRect(0,0,c.width,c.height);
+    $$("#p-puntero .chip").forEach(ch => ch.classList.remove("on"));
+  });
+})();
+
+/* ============================================================
+   Procesador
+   ============================================================ */
+(function cpu(){
+  const bars = $("#cpubars");
+  let running = false, samples = [], best = 0;
+  function chunk(){
+    const t0 = performance.now();
+    let x = 0;
+    for(let i=0;i<3e6;i++){ x += Math.sqrt(i) * Math.sin(i) + (i^3); }
+    const ms = performance.now() - t0;
+    if(x === Infinity) console.log(x);
+    return 3 / (ms/1000) / 1e0; // millones de ops por segundo
+  }
+  function draw(){
+    bars.innerHTML = samples.map(s => {
+      const h = Math.max(3, Math.round((s/best)*100));
+      const slow = s < best*0.75;
+      return '<i class="'+(slow?"slow":"")+'" style="height:'+h+'%"></i>';
+    }).join("");
+  }
+  function run(seconds){
+    if(running) return;
+    running = true; samples = []; best = 0;
+    $("#cpustop").disabled = false;
+    const end = performance.now() + seconds*1000;
+    (function step(){
+      if(!running || performance.now() > end){ stop(); return; }
+      const v = chunk();
+      samples.push(v);
+      if(v > best) best = v;
+      $("#cpunow").textContent = v.toFixed(1);
+      const last = samples.slice(-4);
+      const avg = last.reduce((a,b)=>a+b,0)/last.length;
+      const drop = Math.max(0, Math.round((1 - avg/best)*100));
+      $("#cpudrop").textContent = drop + "%";
+      $("#cpudrop").style.color = drop > 25 ? "var(--fail)" : "var(--teal)";
+      draw();
+      setTimeout(step, 16);
+    })();
+  }
+  function stop(){ running = false; $("#cpustop").disabled = true; }
+  $("#cpurun").addEventListener("click", () => run(15));
+  $("#cpulong").addEventListener("click", () => run(60));
+  $("#cpustop").addEventListener("click", stop);
+})();
+
+/* ============================================================
+   Firmas
+   ============================================================ */
+function signature(id){
+  const c = document.getElementById(id), ctx = c.getContext("2d");
+  let drawing = false;
+  function size(){
+    const dpr = window.devicePixelRatio || 1;
+    const data = c.toDataURL();
+    c.width = c.clientWidth * dpr; c.height = c.clientHeight * dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.lineWidth = 1.9; ctx.lineCap = "round"; ctx.strokeStyle = "#111";
+    const img = new Image(); img.onload = () => ctx.drawImage(img,0,0,c.clientWidth,c.clientHeight); img.src = data;
+  }
+  setTimeout(size, 60);
+  c.addEventListener("pointerdown", e => { drawing = true; c.setPointerCapture(e.pointerId); ctx.beginPath(); ctx.moveTo(e.offsetX, e.offsetY); });
+  c.addEventListener("pointermove", e => { if(!drawing) return; ctx.lineTo(e.offsetX, e.offsetY); ctx.stroke(); });
+  ["pointerup","pointercancel","pointerleave"].forEach(ev => c.addEventListener(ev, () => drawing = false));
+  return c;
+}
+signature("sig1"); signature("sig2");
+$$("[data-clear]").forEach(b => b.addEventListener("click", () => {
+  const c = document.getElementById(b.dataset.clear);
+  c.getContext("2d").clearRect(0,0,c.width,c.height);
+}));
+
+/* ============================================================
+   Acta
+   ============================================================ */
+const FIELDS = ["f-tipo","f-orden","f-fecha","f-cliente","f-doc","f-tel","f-equipo","f-marca","f-serial","f-acc","f-motivo","f-obs","f-tec","f-valor"];
+const LABEL = {v:{ok:"Aprobada", fail:"Con fallas", skip:"No aplica"}};
+$("#f-fecha").value = new Date().toISOString().slice(0,10);
+FIELDS.forEach(f => { const el = document.getElementById(f); if(el) el.addEventListener("input", save); });
+
+function drawResults(){
+  const rows = TESTS.filter(t => t.id!=="acta").map(t => {
+    const r = state.results[t.id];
+    const cls = r.v || "pend";
+    const txt = r.v ? LABEL.v[r.v] : "Sin registrar";
+    return '<tr><td>'+t.n+'</td><td><span class="tag '+cls+'">'+txt+'</span></td><td style="color:var(--muted)">'+esc(r.note||"—")+'</td></tr>';
+  }).join("");
+  $("#restable").innerHTML = '<thead><tr><th>Prueba</th><th>Resultado</th><th>Nota</th></tr></thead><tbody>'+rows+'</tbody>';
+}
+
+function val(id){ const el = document.getElementById(id); return el ? el.value.trim() : ""; }
+
+function buildPaper(){
+  const kbLine = kbHit.size ? (kbHit.size + " de " + kbTotal + " teclas respondieron") : "prueba de teclado no ejecutada";
+  const rows = TESTS.filter(t => t.id!=="acta").map(t => {
+    const r = state.results[t.id];
+    return '<tr><td>'+t.n+'</td><td>'+(r.v ? LABEL.v[r.v] : "Sin registrar")+'</td><td>'+esc(r.note||"")+'</td></tr>';
+  }).join("");
+  const sysRows = Object.keys(state.sys).slice(0,8).map(k => '<tr><td>'+k+'</td><td>'+esc(state.sys[k])+'</td></tr>').join("");
+
+  $("#paper").innerHTML =
+    '<div class="hdr"><div><h1>'+esc(val("f-tipo"))+'</h1>'+
+      '<div class="sub">sotomontessebas · soporte técnico — sotomontes.com</div></div>'+
+      '<div style="text-align:right"><div><b>Orden '+esc(val("f-orden")||"—")+'</b></div><div class="sub">'+esc(val("f-fecha"))+'</div></div></div>'+
+
+    '<table><tr><th style="width:22%">Cliente</th><td>'+esc(val("f-cliente"))+'</td><th style="width:18%">Documento</th><td>'+esc(val("f-doc"))+'</td></tr>'+
+    '<tr><th>Teléfono</th><td>'+esc(val("f-tel"))+'</td><th>Valor aproximado</th><td>'+esc(val("f-valor"))+'</td></tr>'+
+    '<tr><th>Equipo</th><td>'+esc(val("f-equipo"))+'</td><th>Marca y modelo</th><td>'+esc(val("f-marca"))+'</td></tr>'+
+    '<tr><th>Serial</th><td>'+esc(val("f-serial"))+'</td><th>Accesorios</th><td>'+esc(val("f-acc"))+'</td></tr></table>'+
+
+    '<p style="margin:12px 0 2px"><b>Falla reportada por el cliente</b></p><p>'+esc(val("f-motivo")||"—")+'</p>'+
+    '<p style="margin:10px 0 2px"><b>Observaciones del técnico</b></p><p>'+esc(val("f-obs")||"—")+'</p>'+
+
+    '<p style="margin:14px 0 2px"><b>Pruebas realizadas</b></p>'+
+    '<table><tr><th>Prueba</th><th style="width:20%">Resultado</th><th style="width:40%">Nota</th></tr>'+rows+'</table>'+
+    '<p class="sub" style="margin-top:6px">Teclado: '+kbLine+'.</p>'+
+
+    '<p style="margin:14px 0 2px"><b>Datos del sistema al momento de la revisión</b></p>'+
+    '<table>'+sysRows+'</table>'+
+
+    '<p class="sub" style="margin-top:14px">El cliente declara que entrega el equipo en las condiciones descritas y autoriza la revisión. '+
+    'Los equipos no reclamados dentro de los 30 días siguientes al aviso de entrega generan costo de bodegaje. '+
+    'No se responde por información no respaldada previamente por el cliente.</p>'+
+
+    '<div class="two"><div><img src="'+document.getElementById("sig1").toDataURL()+'"><div>'+esc(val("f-cliente")||"Cliente")+'</div><div class="sub">Firma del cliente</div></div>'+
+    '<div><img src="'+document.getElementById("sig2").toDataURL()+'"><div>'+esc(val("f-tec")||"Técnico")+'</div><div class="sub">Técnico responsable</div></div></div>';
+}
+
+$("#print").addEventListener("click", () => { buildPaper(); setTimeout(() => window.print(), 120); });
+
+$("#export").addEventListener("click", () => {
+  const data = {generado:new Date().toISOString(), equipo:state.sys, pruebas:state.results, teclado:{ok:kbHit.size,total:kbTotal}, acta:{}};
+  FIELDS.forEach(f => data.acta[f.replace("f-","")] = val(f));
+  const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = (val("f-orden")||"diagnostico") + ".json";
+  a.click();
+});
+
+$("#reset").addEventListener("click", () => {
+  if(!confirm("Se borran las pruebas y los datos del acta. ¿Continuar?")) return;
+  try{ localStorage.removeItem("sse-diag"); }catch(e){}
+  location.reload();
+});
+
+/* ============================================================
+   Guardado local (tolerante: en USB puede no estar disponible)
+   ============================================================ */
+function save(){
+  try{
+    const d = {results:state.results, acta:{}};
+    FIELDS.forEach(f => d.acta[f] = val(f));
+    localStorage.setItem("sse-diag", JSON.stringify(d));
+  }catch(e){}
+}
+(function load(){
+  try{
+    const raw = localStorage.getItem("sse-diag");
+    if(!raw) return;
+    const d = JSON.parse(raw);
+    if(d.results) Object.keys(d.results).forEach(k => {
+      if(!state.results[k]) return;
+      state.results[k] = d.results[k];
+      paintDot(k);
+      const v = document.querySelector('.verdict[data-for="'+k+'"]');
+      if(v){
+        v.querySelectorAll(".vbtn").forEach(x => x.classList.toggle("on", x.dataset.v===d.results[k].v));
+        v.querySelector(".note").value = d.results[k].note || "";
+      }
+    });
+    if(d.acta) Object.keys(d.acta).forEach(f => { const el = document.getElementById(f); if(el && d.acta[f]) el.value = d.acta[f]; });
+  }catch(e){}
+})();
+
+drawResults();
+</script>
+</body>
+</html>

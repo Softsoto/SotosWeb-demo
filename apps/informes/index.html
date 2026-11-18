@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Generador de Informes · Soporte y Mantenimiento</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+  :root{
+    --bg:#12151a;
+    --panel:#1a1e25;
+    --panel-alt:#20252c;
+    --line:#2b313b;
+    --text:#ece9e3;
+    --text-dim:#8b929d;
+    --teal:#45d2be;
+    --amber:#f0b429;
+    --red:#e5533d;
+    --display:'Oswald', sans-serif;
+    --mono:'JetBrains Mono', monospace;
+    --body:'Inter', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;}
+  html,body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--body);
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{max-width:1320px;margin:0 auto;padding:28px 24px 64px;}
+  .topbar{
+    display:flex;align-items:baseline;gap:14px;
+    border-bottom:1px solid var(--line);
+    padding-bottom:18px;margin-bottom:26px;
+    flex-wrap:wrap;
+  }
+  .topbar .tag-icon{
+    width:34px;height:34px;border-radius:7px;
+    background:linear-gradient(145deg,var(--teal),#2a9d90);
+    position:relative;flex:none;
+  }
+  .topbar .tag-icon::after{
+    content:'';position:absolute;top:7px;left:7px;
+    width:8px;height:8px;border-radius:50%;
+    background:var(--bg);
+  }
+  .topbar h1{
+    font-family:var(--display);font-weight:600;
+    font-size:20px;letter-spacing:.04em;text-transform:uppercase;
+    margin:0;color:var(--text);
+  }
+  .topbar span{
+    font-family:var(--mono);font-size:12px;color:var(--text-dim);
+  }
+  .layout{display:grid;grid-template-columns:1.15fr 0.85fr;gap:28px;align-items:start;}
+  @media (max-width:980px){.layout{grid-template-columns:1fr;}}
+
+  .group{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:18px 20px 20px;margin-bottom:16px;
+  }
+  .eyebrow{
+    display:flex;align-items:center;gap:10px;margin-bottom:14px;
+  }
+  .eyebrow .num{
+    font-family:var(--mono);font-size:12px;color:var(--bg);
+    background:var(--teal);border-radius:4px;padding:2px 6px;font-weight:700;
+  }
+  .eyebrow .label{
+    font-family:var(--display);font-size:13px;letter-spacing:.09em;
+    text-transform:uppercase;color:var(--text-dim);
+  }
+  .row{display:grid;gap:12px;margin-bottom:12px;}
+  .row.cols-2{grid-template-columns:1fr 1fr;}
+  .row.cols-3{grid-template-columns:1fr 1fr 1fr;}
+  @media (max-width:600px){.row.cols-2,.row.cols-3{grid-template-columns:1fr;}}
+
+  label{
+    display:block;font-size:11px;font-family:var(--mono);
+    color:var(--text-dim);margin-bottom:5px;letter-spacing:.03em;
+    text-transform:uppercase;
+  }
+  input[type=text],input[type=date],input[type=time],input[type=number],
+  select,textarea{
+    width:100%;background:var(--panel-alt);border:1px solid var(--line);
+    color:var(--text);border-radius:6px;padding:9px 10px;
+    font-family:var(--body);font-size:13.5px;
+  }
+  input:focus,select:focus,textarea:focus{
+    outline:none;border-color:var(--teal);
+  }
+  textarea{resize:vertical;min-height:64px;line-height:1.4;}
+
+  .service-toggle{display:flex;gap:10px;margin-bottom:14px;}
+  .service-toggle button{
+    flex:1;padding:10px;border-radius:7px;border:1px solid var(--line);
+    background:var(--panel-alt);color:var(--text-dim);cursor:pointer;
+    font-family:var(--display);font-size:13px;letter-spacing:.05em;
+    text-transform:uppercase;transition:all .15s ease;
+  }
+  .service-toggle button.active[data-mode="virtual"]{
+    background:rgba(69,210,190,.12);border-color:var(--teal);color:var(--teal);
+  }
+  .service-toggle button.active[data-mode="presencial"]{
+    background:rgba(240,180,41,.12);border-color:var(--amber);color:var(--amber);
+  }
+  .conditional{display:none;}
+  .conditional.active{display:block;}
+
+  table.parts{width:100%;border-collapse:collapse;margin-top:6px;}
+  table.parts th{
+    font-family:var(--mono);font-size:10.5px;color:var(--text-dim);
+    text-align:left;padding:6px 6px;border-bottom:1px solid var(--line);
+    text-transform:uppercase;
+  }
+  table.parts td{padding:5px 4px;vertical-align:middle;}
+  table.parts input{padding:6px 8px;font-size:13px;}
+  .add-row-btn,.rm-row-btn{
+    background:none;border:1px dashed var(--line);color:var(--text-dim);
+    border-radius:5px;cursor:pointer;font-family:var(--mono);font-size:12px;
+    padding:6px 10px;
+  }
+  .add-row-btn{margin-top:8px;}
+  .rm-row-btn{border-color:var(--red);color:var(--red);padding:5px 8px;}
+
+  .status-row{display:flex;gap:10px;margin-bottom:6px;}
+  .status-row button{
+    flex:1;padding:9px;border-radius:7px;border:1px solid var(--line);
+    background:var(--panel-alt);color:var(--text-dim);cursor:pointer;
+    font-family:var(--mono);font-size:12px;text-transform:uppercase;
+  }
+  .status-row button.active[data-status="resuelto"]{background:rgba(69,210,190,.14);border-color:var(--teal);color:var(--teal);}
+  .status-row button.active[data-status="pendiente"]{background:rgba(240,180,41,.14);border-color:var(--amber);color:var(--amber);}
+  .status-row button.active[data-status="seguimiento"]{background:rgba(229,83,61,.14);border-color:var(--red);color:var(--red);}
+
+  .checkline{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-dim);margin-top:8px;}
+
+  /* PREVIEW TICKET */
+  .preview-col{position:sticky;top:20px;}
+  .ticket{
+    position:relative;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:26px 22px 20px;overflow:visible;
+  }
+  .ticket::before{
+    content:'';position:absolute;top:14px;left:14px;
+    width:16px;height:16px;border-radius:50%;
+    background:var(--bg);border:1px solid var(--line);
+  }
+  .ticket-head{
+    display:flex;justify-content:space-between;align-items:flex-start;
+    padding-left:26px;margin-bottom:14px;
+  }
+  .ticket-head .co{font-family:var(--display);font-size:15px;letter-spacing:.03em;text-transform:uppercase;}
+  .ticket-head .meta{text-align:right;font-family:var(--mono);font-size:11px;color:var(--text-dim);}
+  .ticket-title{
+    font-family:var(--mono);font-size:11px;color:var(--text-dim);
+    text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px;
+  }
+  .ticket-body{font-size:13px;line-height:1.55;}
+  .ticket-body .line{display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-bottom:1px dotted var(--line);}
+  .ticket-body .line b{font-weight:600;color:var(--text);}
+  .ticket-body .line span.val{color:var(--text-dim);text-align:right;font-family:var(--mono);font-size:12px;}
+  .badge{
+    display:inline-block;font-family:var(--mono);font-size:11px;font-weight:700;
+    padding:3px 9px;border-radius:20px;text-transform:uppercase;letter-spacing:.04em;
+  }
+  .badge.virtual{background:rgba(69,210,190,.15);color:var(--teal);border:1px solid var(--teal);}
+  .badge.presencial{background:rgba(240,180,41,.15);color:var(--amber);border:1px solid var(--amber);}
+  .stamp{
+    display:inline-block;transform:rotate(-6deg);border:2px solid var(--teal);color:var(--teal);
+    font-family:var(--display);font-weight:700;font-size:13px;letter-spacing:.08em;
+    padding:4px 12px;border-radius:6px;text-transform:uppercase;margin-top:10px;
+  }
+  .stamp.pendiente{border-color:var(--amber);color:var(--amber);}
+  .stamp.seguimiento{border-color:var(--red);color:var(--red);}
+
+  .tear{
+    position:relative;margin:18px -22px 14px;border-top:2px dashed var(--line);
+  }
+  .tear::before,.tear::after{
+    content:'';position:absolute;top:-9px;width:18px;height:18px;
+    border-radius:50%;background:var(--bg);
+  }
+  .tear::before{left:-9px;}
+  .tear::after{right:-9px;}
+  .stub{font-family:var(--mono);font-size:10.5px;color:var(--text-dim);display:flex;justify-content:space-between;}
+
+  #generateBtn{
+    width:100%;margin-top:16px;padding:14px;border:none;border-radius:8px;
+    background:var(--teal);color:#0c1512;font-family:var(--display);
+    font-weight:600;font-size:14.5px;letter-spacing:.05em;text-transform:uppercase;
+    cursor:pointer;transition:transform .1s ease;
+  }
+  #generateBtn:hover{transform:translateY(-1px);}
+  #generateBtn:active{transform:translateY(0);}
+  .hint{font-family:var(--mono);font-size:11px;color:var(--text-dim);text-align:center;margin-top:8px;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="tag-icon"></div>
+    <h1>Generador de informes · Soporte y mantenimiento</h1>
+    <span id="reportIdTop"></span>
+  </div>
+
+  <div class="layout">
+
+    <!-- FORM COLUMN -->
+    <div class="form-col">
+
+      <div class="group">
+        <div class="eyebrow"><span class="num">01</span><span class="label">Datos del informe</span></div>
+        <div class="row cols-3">
+          <div>
+            <label>N.º de informe</label>
+            <input type="text" id="f_reportId">
+          </div>
+          <div>
+            <label>Fecha</label>
+            <input type="date" id="f_fecha">
+          </div>
+          <div>
+            <label>Empresa / técnico (marca)</label>
+            <input type="text" id="f_empresa" placeholder="sotomontessebas · soporte técnico">
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="eyebrow"><span class="num">02</span><span class="label">Cliente</span></div>
+        <div class="row cols-2">
+          <div><label>Nombre / empresa</label><input type="text" id="f_clienteNombre" placeholder="Nombre del cliente"></div>
+          <div><label>Contacto (tel / email)</label><input type="text" id="f_clienteContacto" placeholder="Teléfono o correo"></div>
+        </div>
+        <div class="row cols-2">
+          <div><label>Técnico responsable</label><input type="text" id="f_tecnico" placeholder="Nombre del técnico"></div>
+          <div><label>Referencia / ticket previo</label><input type="text" id="f_referencia" placeholder="Opcional"></div>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="eyebrow"><span class="num">03</span><span class="label">Tipo de servicio</span></div>
+        <div class="service-toggle">
+          <button type="button" data-mode="virtual" class="active">Virtual</button>
+          <button type="button" data-mode="presencial">Presencial</button>
+        </div>
+
+        <div class="conditional active" id="cond_virtual">
+          <div class="row cols-2">
+            <div><label>Plataforma / herramienta remota</label><input type="text" id="f_plataforma" placeholder="AnyDesk, TeamViewer, etc."></div>
+            <div><label>Duración de la sesión</label><input type="text" id="f_duracion" placeholder="Ej. 45 min"></div>
+          </div>
+          <div class="row cols-2">
+            <div><label>Hora de inicio</label><input type="time" id="f_horaInicioV"></div>
+            <div><label>Hora de fin</label><input type="time" id="f_horaFinV"></div>
+          </div>
+        </div>
+
+        <div class="conditional" id="cond_presencial">
+          <div class="row">
+            <div><label>Ubicación / dirección</label><input type="text" id="f_ubicacion" placeholder="Dirección de la visita"></div>
+          </div>
+          <div class="row cols-2">
+            <div><label>Hora de llegada</label><input type="time" id="f_horaLlegada"></div>
+            <div><label>Hora de salida</label><input type="time" id="f_horaSalida"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="eyebrow"><span class="num">04</span><span class="label">Equipo</span></div>
+        <div class="row cols-2">
+          <div><label>Tipo de equipo</label><input type="text" id="f_equipoTipo" placeholder="PC, portátil, impresora..."></div>
+          <div><label>Marca / modelo</label><input type="text" id="f_equipoMarca" placeholder="Marca y modelo"></div>
+        </div>
+        <div class="row">
+          <div><label>Número de serie / activo</label><input type="text" id="f_equipoSerie" placeholder="S/N o código de activo"></div>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="eyebrow"><span class="num">05</span><span class="label">Diagnóstico y trabajo realizado</span></div>
+        <div class="row">
+          <div><label>Motivo de la solicitud</label><textarea id="f_motivo" placeholder="Descripción del problema reportado por el cliente"></textarea></div>
+        </div>
+        <div class="row">
+          <div><label>Diagnóstico técnico</label><textarea id="f_diagnostico" placeholder="Hallazgos y causa identificada"></textarea></div>
+        </div>
+        <div class="row">
+          <div><label>Acciones realizadas</label><textarea id="f_acciones" placeholder="Procedimientos aplicados"></textarea></div>
+        </div>
+        <div class="row">
+          <div><label>Recomendaciones</label><textarea id="f_recomendaciones" placeholder="Sugerencias para el cliente"></textarea></div>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="eyebrow"><span class="num">06</span><span class="label">Repuestos y materiales</span></div>
+        <table class="parts" id="partsTable">
+          <thead><tr><th style="width:50%">Descripción</th><th style="width:20%">Cant.</th><th style="width:22%">Costo</th><th></th></tr></thead>
+          <tbody id="partsBody"></tbody>
+        </table>
+        <button type="button" class="add-row-btn" id="addPartBtn">+ agregar repuesto</button>
+      </div>
+
+      <div class="group">
+        <div class="eyebrow"><span class="num">07</span><span class="label">Estado y seguimiento</span></div>
+        <div class="status-row">
+          <button type="button" data-status="resuelto" class="active">Resuelto</button>
+          <button type="button" data-status="pendiente">Pendiente</button>
+          <button type="button" data-status="seguimiento">Requiere seguimiento</button>
+        </div>
+        <div class="row">
+          <div><label>Fecha de próxima visita / seguimiento (opcional)</label><input type="date" id="f_proxima"></div>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="eyebrow"><span class="num">08</span><span class="label">Conformidad</span></div>
+        <div class="row cols-2">
+          <div><label>Nombre técnico (firma)</label><input type="text" id="f_firmaTecnico" placeholder="Se completa con el nombre del técnico"></div>
+          <div><label>Nombre cliente (firma)</label><input type="text" id="f_firmaCliente" placeholder="Se completa con el nombre del cliente"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- PREVIEW COLUMN -->
+    <div class="preview-col">
+      <div class="ticket" id="ticket">
+        <div class="ticket-head">
+          <div>
+            <div class="ticket-title">Informe de soporte y mantenimiento</div>
+            <div class="co" id="p_empresa">sotomontessebas · soporte técnico</div>
+          </div>
+          <div class="meta">
+            <div id="p_reportId">—</div>
+            <div id="p_fecha">—</div>
+          </div>
+        </div>
+
+        <div class="ticket-body">
+          <div class="line"><b>Cliente</b><span class="val" id="p_cliente">—</span></div>
+          <div class="line"><b>Técnico</b><span class="val" id="p_tecnico">—</span></div>
+          <div class="line"><b>Servicio</b><span class="val"><span class="badge virtual" id="p_modoBadge">VIRTUAL</span></span></div>
+          <div class="line"><b>Equipo</b><span class="val" id="p_equipo">—</span></div>
+          <div class="line"><b>N.º serie</b><span class="val" id="p_serie">—</span></div>
+          <div class="line"><b>Repuestos</b><span class="val" id="p_repuestos">0 ítems</span></div>
+        </div>
+
+        <div id="p_stamp" class="stamp">Resuelto</div>
+
+        <div class="tear"></div>
+        <div class="stub">
+          <span id="p_stubId">—</span>
+          <span>Copia técnico / cliente</span>
+        </div>
+      </div>
+
+      <button id="generateBtn">Generar PDF</button>
+      <div class="hint">Se genera localmente en tu navegador · sin subir datos a ningún servidor</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ---------- helpers ----------
+function el(id){return document.getElementById(id);}
+function todayISO(){const d=new Date();return d.toISOString().slice(0,10);}
+function genReportId(){
+  const d=new Date();
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,'0');
+  const day=String(d.getDate()).padStart(2,'0');
+  const rand=String(Math.floor(Math.random()*9000)+1000);
+  return `INF-${y}${m}${day}-${rand}`;
+}
+
+let serviceMode='virtual';
+let statusMode='resuelto';
+let partIdCounter=0;
+
+// init defaults
+el('f_reportId').value=genReportId();
+el('f_fecha').value=todayISO();
+el('f_empresa').value='sotomontessebas · soporte técnico';
+
+// ---------- service toggle ----------
+document.querySelectorAll('.service-toggle button').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.service-toggle button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    serviceMode=btn.dataset.mode;
+    el('cond_virtual').classList.toggle('active',serviceMode==='virtual');
+    el('cond_presencial').classList.toggle('active',serviceMode==='presencial');
+    updatePreview();
+  });
+});
+
+// ---------- status toggle ----------
+document.querySelectorAll('.status-row button').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.status-row button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    statusMode=btn.dataset.status;
+    updatePreview();
+  });
+});
+
+// ---------- parts table ----------
+function addPartRow(nombre='',cantidad='',costo=''){
+  partIdCounter++;
+  const id='part_'+partIdCounter;
+  const tr=document.createElement('tr');
+  tr.id=id;
+  tr.innerHTML=`
+    <td><input type="text" class="p-nombre" value="${nombre}" placeholder="Descripción"></td>
+    <td><input type="number" class="p-cant" value="${cantidad}" min="0"></td>
+    <td><input type="text" class="p-costo" value="${costo}" placeholder="$ 0"></td>
+    <td><button type="button" class="rm-row-btn">✕</button></td>
+  `;
+  el('partsBody').appendChild(tr);
+  tr.querySelector('.rm-row-btn').addEventListener('click',()=>{tr.remove();updatePreview();});
+  tr.querySelectorAll('input').forEach(inp=>inp.addEventListener('input',updatePreview));
+}
+el('addPartBtn').addEventListener('click',()=>addPartRow());
+addPartRow(); // start with one empty row
+
+function getParts(){
+  const rows=[...el('partsBody').querySelectorAll('tr')];
+  return rows.map(r=>({
+    nombre:r.querySelector('.p-nombre').value.trim(),
+    cantidad:r.querySelector('.p-cant').value.trim(),
+    costo:r.querySelector('.p-costo').value.trim()
+  })).filter(p=>p.nombre!=='');
+}
+
+// ---------- live preview ----------
+function updatePreview(){
+  el('p_empresa').textContent=el('f_empresa').value||'sotomontessebas · soporte técnico';
+  el('p_reportId').textContent=el('f_reportId').value||'—';
+  el('p_fecha').textContent=el('f_fecha').value||'—';
+  el('p_stubId').textContent=el('f_reportId').value||'—';
+
+  const cliente=el('f_clienteNombre').value||'—';
+  el('p_cliente').textContent=cliente;
+  el('p_tecnico').textContent=el('f_tecnico').value||'—';
+
+  const badge=el('p_modoBadge');
+  badge.textContent=serviceMode==='virtual'?'VIRTUAL':'PRESENCIAL';
+  badge.className='badge '+serviceMode;
+
+  const equipoTxt=[el('f_equipoTipo').value,el('f_equipoMarca').value].filter(Boolean).join(' · ')||'—';
+  el('p_equipo').textContent=equipoTxt;
+  el('p_serie').textContent=el('f_equipoSerie').value||'—';
+
+  const parts=getParts();
+  el('p_repuestos').textContent=parts.length+(parts.length===1?' ítem':' ítems');
+
+  const stamp=el('p_stamp');
+  const stampLabels={resuelto:'Resuelto',pendiente:'Pendiente',seguimiento:'Seguimiento'};
+  stamp.textContent=stampLabels[statusMode];
+  stamp.className='stamp '+(statusMode==='resuelto'?'':statusMode);
+}
+document.querySelectorAll('input,textarea').forEach(inp=>inp.addEventListener('input',updatePreview));
+updatePreview();
+
+// ---------- PDF generation ----------
+el('generateBtn').addEventListener('click',()=>{
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:'mm',format:'a4'});
+  const pageW=210, pageH=297, marginX=16;
+  let y=18;
+
+  const teal=[69,210,190], amber=[240,180,41], red=[229,83,61], dimGray=[110,116,124], dark=[22,26,32];
+
+  function checkBreak(h){
+    if(y+h>pageH-20){
+      doc.addPage();
+      y=18;
+    }
+  }
+
+  function sectionTitle(num,title){
+    checkBreak(10);
+    doc.setFillColor(...teal);
+    doc.roundedRect(marginX,y-4.2,7,5,1,1,'F');
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(8);
+    doc.setTextColor(255,255,255);
+    doc.text(String(num),marginX+3.5,y-0.7,{align:'center'});
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(10.5);
+    doc.setTextColor(...dark);
+    doc.text(title.toUpperCase(),marginX+10,y);
+    doc.setDrawColor(230,230,230);
+    doc.line(marginX,y+2.5,pageW-marginX,y+2.5);
+    y+=9;
+  }
+
+  function fieldLine(label,value){
+    checkBreak(6);
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(9);
+    doc.setTextColor(...dimGray);
+    doc.text(label+':',marginX,y);
+    doc.setFont('helvetica','normal');
+    doc.setTextColor(...dark);
+    doc.text(String(value||'—'),marginX+42,y);
+    y+=6;
+  }
+
+  function paragraph(label,value){
+    checkBreak(8);
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(9);
+    doc.setTextColor(...dimGray);
+    doc.text(label.toUpperCase(),marginX,y);
+    y+=5;
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(9.5);
+    doc.setTextColor(...dark);
+    const text=value && value.trim()!=='' ? value : '—';
+    const lines=doc.splitTextToSize(text,pageW-marginX*2);
+    checkBreak(lines.length*5+2);
+    doc.text(lines,marginX,y);
+    y+=lines.length*5+4;
+  }
+
+  // ---- Header ----
+  doc.setFillColor(...dark);
+  doc.rect(0,0,pageW,26,'F');
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(14);
+  doc.setTextColor(255,255,255);
+  doc.text((el('f_empresa').value||'sotomontessebas · soporte técnico'),marginX,12);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(9);
+  doc.setTextColor(...teal);
+  doc.text('INFORME DE SOPORTE Y MANTENIMIENTO DE EQUIPOS',marginX,18.5);
+  doc.setFontSize(8.5);
+  doc.setTextColor(200,200,200);
+  doc.text('N.º '+(el('f_reportId').value||'—'),pageW-marginX,10,{align:'right'});
+  doc.text('Fecha: '+(el('f_fecha').value||'—'),pageW-marginX,15,{align:'right'});
+  y=36;
+
+  // ---- Cliente / técnico ----
+  sectionTitle(1,'Cliente y técnico');
+  fieldLine('Cliente',el('f_clienteNombre').value);
+  fieldLine('Contacto',el('f_clienteContacto').value);
+  fieldLine('Técnico responsable',el('f_tecnico').value);
+  fieldLine('Referencia',el('f_referencia').value);
+  y+=2;
+
+  // ---- Tipo de servicio ----
+  sectionTitle(2,'Tipo de servicio');
+  const modeColor = serviceMode==='virtual'?teal:amber;
+  doc.setFillColor(...modeColor);
+  doc.roundedRect(marginX,y-4,32,6,2,2,'F');
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(255,255,255);
+  doc.text(serviceMode==='virtual'?'VIRTUAL':'PRESENCIAL',marginX+16,y,{align:'center'});
+  y+=8;
+  if(serviceMode==='virtual'){
+    fieldLine('Plataforma',el('f_plataforma').value);
+    fieldLine('Duración',el('f_duracion').value);
+    fieldLine('Hora inicio - fin',(el('f_horaInicioV').value||'—')+'  →  '+(el('f_horaFinV').value||'—'));
+  }else{
+    fieldLine('Ubicación',el('f_ubicacion').value);
+    fieldLine('Hora llegada - salida',(el('f_horaLlegada').value||'—')+'  →  '+(el('f_horaSalida').value||'—'));
+  }
+  y+=2;
+
+  // ---- Equipo ----
+  sectionTitle(3,'Equipo');
+  fieldLine('Tipo de equipo',el('f_equipoTipo').value);
+  fieldLine('Marca / modelo',el('f_equipoMarca').value);
+  fieldLine('N.º de serie / activo',el('f_equipoSerie').value);
+  y+=2;
+
+  // ---- Diagnóstico ----
+  sectionTitle(4,'Diagnóstico y trabajo realizado');
+  paragraph('Motivo de la solicitud',el('f_motivo').value);
+  paragraph('Diagnóstico técnico',el('f_diagnostico').value);
+  paragraph('Acciones realizadas',el('f_acciones').value);
+  paragraph('Recomendaciones',el('f_recomendaciones').value);
+
+  // ---- Repuestos ----
+  const parts=getParts();
+  sectionTitle(5,'Repuestos y materiales');
+  if(parts.length>0){
+    doc.autoTable({
+      startY:y,
+      margin:{left:marginX,right:marginX},
+      head:[['Descripción','Cant.','Costo']],
+      body:parts.map(p=>[p.nombre,p.cantidad||'—',p.costo||'—']),
+      styles:{font:'helvetica',fontSize:9,cellPadding:3,textColor:dark},
+      headStyles:{fillColor:dark,textColor:255,fontStyle:'bold'},
+      alternateRowStyles:{fillColor:[245,245,245]},
+      theme:'grid'
+    });
+    y=doc.lastAutoTable.finalY+8;
+  }else{
+    doc.setFont('helvetica','italic');
+    doc.setFontSize(9.5);
+    doc.setTextColor(...dimGray);
+    doc.text('No se registraron repuestos o materiales.',marginX,y);
+    y+=8;
+  }
+
+  // ---- Estado ----
+  checkBreak(24);
+  sectionTitle(6,'Estado y seguimiento');
+  const statusColor = statusMode==='resuelto'?teal:(statusMode==='pendiente'?amber:red);
+  const statusLabel = statusMode==='resuelto'?'RESUELTO':(statusMode==='pendiente'?'PENDIENTE':'REQUIERE SEGUIMIENTO');
+  doc.setDrawColor(...statusColor);
+  doc.setLineWidth(0.7);
+  doc.roundedRect(marginX,y-5,50,8,2,2,'S');
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(9);
+  doc.setTextColor(...statusColor);
+  doc.text(statusLabel,marginX+25,y,{align:'center'});
+  y+=12;
+  if(el('f_proxima').value){
+    fieldLine('Próxima visita / seguimiento',el('f_proxima').value);
+  }
+  y+=4;
+
+  // ---- Firmas ----
+  checkBreak(30);
+  sectionTitle(7,'Conformidad');
+  const colW=(pageW-marginX*2-10)/2;
+  doc.setDrawColor(200,200,200);
+  doc.line(marginX,y+14,marginX+colW,y+14);
+  doc.line(marginX+colW+10,y+14,marginX+colW+10+colW,y+14);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(9);
+  doc.setTextColor(...dark);
+  doc.text(el('f_firmaTecnico').value||'—',marginX,y+12);
+  doc.text(el('f_firmaCliente').value||'—',marginX+colW+10,y+12);
+  doc.setFontSize(8);
+  doc.setTextColor(...dimGray);
+  doc.text('Firma técnico',marginX,y+18);
+  doc.text('Firma cliente',marginX+colW+10,y+18);
+
+  // ---- Footer on all pages ----
+  const pageCount=doc.internal.getNumberOfPages();
+  for(let i=1;i<=pageCount;i++){
+    doc.setPage(i);
+    doc.setDrawColor(230,230,230);
+    doc.line(marginX,pageH-14,pageW-marginX,pageH-14);
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...dimGray);
+    doc.text('Informe N.º '+(el('f_reportId').value||'—'),marginX,pageH-9);
+    doc.text('Página '+i+' de '+pageCount,pageW-marginX,pageH-9,{align:'right'});
+  }
+
+  const filename=(el('f_reportId').value||'informe')+'.pdf';
+  doc.save(filename);
+});
+</script>
+</body>
+</html>

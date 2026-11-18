@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sala clásica · Sotos</title>
+  <style>html, body { margin: 0; height: 100%; background: #060606; overflow: hidden; } arcade-solo { display: block; height: 100%; }</style>
+  <script src="arcade.js"></script>
+</head>
+<body>
+<script>
+  // Un juego de la Sala clásica, solo · © 2026 Sebastian Sotomontes
+  const juego = new URLSearchParams(location.search).get("juego") || "pac";
+  const el = document.createElement("arcade-solo"); el.setAttribute("game", juego); document.body.appendChild(el);
+  el.addEventListener("arcade-exit", () => { try { parent.postMessage({ type: "sotos-game-close", game: "sala-" + juego }, location.origin); } catch (e) {} });
+</script>
+</body>
+</html>
